@@ -7,8 +7,12 @@ const player1Score = document.querySelector('.player1');
 const player2Score = document.querySelector('.player2');
 
 // 游戏变量
-const paddleSpeed = 8;
-const shuttlecockSpeed = 5;
+const basePaddleSpeed = 5; // 基础移动速度
+const maxPaddleSpeed = 15; // 最大移动速度
+const paddleAcceleration = 0.1; // 长按加速速率
+const baseShuttlecockSpeed = 3; // 基础羽毛球速度
+let paddleSpeed = basePaddleSpeed;
+let shuttlecockSpeed = baseShuttlecockSpeed;
 let shuttlecockX = 400;
 let shuttlecockY = 250;
 let dx = shuttlecockSpeed;
@@ -33,8 +37,12 @@ restartBtn.addEventListener('click', restartGame);
 const keys = {
     w: false,
     s: false,
+    a: false,
+    d: false,
     ArrowUp: false,
-    ArrowDown: false
+    ArrowDown: false,
+    ArrowLeft: false,
+    ArrowRight: false
 };
 
 // 事件监听
@@ -52,6 +60,7 @@ document.addEventListener('keyup', (e) => {
 
 // 游戏循环
 function gameLoop() {
+    if (!gameActive) return;
     movePaddles();
     moveShuttlecock();
     checkCollisions();
@@ -59,26 +68,41 @@ function gameLoop() {
     requestAnimationFrame(gameLoop);
 }
 
+// 更新球拍速度
+function updatePaddleSpeed() {
+    // 检测是否有按键按下
+    const anyKeyPressed = Object.values(keys).some(v => v);
+    
+    if (anyKeyPressed) {
+        // 长按加速
+        paddleSpeed = Math.min(paddleSpeed + paddleAcceleration, maxPaddleSpeed);
+    } else {
+        // 松开按键时重置速度
+        paddleSpeed = basePaddleSpeed;
+    }
+}
+
 // 移动球拍
 function movePaddles() {
-    // 左球拍（W/S/A/D）
+    updatePaddleSpeed();
+    
+    // 左球拍移动限制
     const leftPaddleRect = leftPaddle.getBoundingClientRect();
     const leftPaddleTop = parseFloat(leftPaddle.style.top) || 0;
     const leftPaddleLeft = parseFloat(leftPaddle.style.left) || 0;
     
-    // 上下移动（允许伸出球场一半高度）
-    const verticalLimit = -leftPaddleRect.height / 2;
-    if (keys.w && leftPaddleTop > verticalLimit) {
-        leftPaddle.style.top = `${Math.max(verticalLimit, leftPaddleTop - paddleSpeed)}px`;
+    // 上下移动（不能出球场）
+    if (keys.w && leftPaddleTop > 0) {
+        leftPaddle.style.top = `${Math.max(0, leftPaddleTop - paddleSpeed)}px`;
     }
-    if (keys.s && leftPaddleTop + leftPaddleRect.height < court.offsetHeight + leftPaddleRect.height/2) {
+    if (keys.s && leftPaddleTop + leftPaddleRect.height < court.offsetHeight) {
         leftPaddle.style.top = `${Math.min(
-            court.offsetHeight - leftPaddleRect.height/2,
+            court.offsetHeight - leftPaddleRect.height,
             leftPaddleTop + paddleSpeed
         )}px`;
     }
 
-    // 左右移动（不能越过中线）
+    // 前后移动（不能越过中线）
     if (keys.a && leftPaddleLeft > 0) {
         leftPaddle.style.left = `${Math.max(0, leftPaddleLeft - paddleSpeed)}px`;
     }
@@ -89,25 +113,25 @@ function movePaddles() {
         )}px`;
     }
 
-    // 右球拍（上下箭头/左右箭头）
+    // 右球拍移动限制
     const rightPaddleRect = rightPaddle.getBoundingClientRect();
     const rightPaddleTop = parseFloat(rightPaddle.style.top) || 0;
-    const rightPaddleLeft = parseFloat(rightPaddle.style.left) || court.offsetWidth/2;
+    const rightPaddleLeft = parseFloat(rightPaddle.style.left) || (court.offsetWidth - rightPaddleRect.width);
     
-    // 上下移动（允许伸出球场一半高度）
-    if (keys.ArrowUp && rightPaddleTop > verticalLimit) {
-        rightPaddle.style.top = `${Math.max(verticalLimit, rightPaddleTop - paddleSpeed)}px`;
+    // 上下移动（不能出球场）
+    if (keys.ArrowUp && rightPaddleTop > 0) {
+        rightPaddle.style.top = `${Math.max(0, rightPaddleTop - paddleSpeed)}px`;
     }
-    if (keys.ArrowDown && rightPaddleTop + rightPaddleRect.height < court.offsetHeight + rightPaddleRect.height/2) {
+    if (keys.ArrowDown && rightPaddleTop + rightPaddleRect.height < court.offsetHeight) {
         rightPaddle.style.top = `${Math.min(
-            court.offsetHeight - rightPaddleRect.height/2,
+            court.offsetHeight - rightPaddleRect.height,
             rightPaddleTop + paddleSpeed
         )}px`;
     }
 
-    // 左右移动（不能越过中线）
+    // 前后移动（不能越过中线）
     if (keys.ArrowLeft && rightPaddleLeft > court.offsetWidth/2) {
-        rightPaddle.style.left = `${Math.max(court.offsetWidth/2, rightPaddleLeft - paddleSpeed)}px`;
+        rightPaddle.style.left = `${Math.max(court.offsetWidth/2 - rightPaddleRect.width, rightPaddleLeft - paddleSpeed)}px`;
     }
     if (keys.ArrowRight && rightPaddleLeft + rightPaddleRect.width < court.offsetWidth) {
         rightPaddle.style.left = `${Math.min(
@@ -145,14 +169,15 @@ function checkCollisions() {
     const leftPaddleRect = getRelativePosition(leftPaddle);
     const rightPaddleRect = getRelativePosition(rightPaddle);
 
-    // 上下边界碰撞
-    if (shuttlecockRect.top <= 0) {
-        shuttlecockY = 0;
-        dy = Math.abs(dy);
-    }
-    if (shuttlecockRect.bottom >= court.offsetHeight) {
-        shuttlecockY = court.offsetHeight - shuttlecockRect.height;
-        dy = -Math.abs(dy);
+    // 上下边界碰撞 - 直接得分
+    if (shuttlecockRect.top <= 0 || shuttlecockRect.bottom >= court.offsetHeight) {
+        if (shuttlecockRect.left < court.offsetWidth/2) {
+            score2++;
+            endGame(2);
+        } else {
+            score1++;
+            endGame(1);
+        }
     }
 
     // 左球拍碰撞
@@ -163,7 +188,18 @@ function checkCollisions() {
         shuttlecockX = leftPaddleRect.right;
         // 根据碰撞位置调整垂直速度
         const hitPosition = (shuttlecockRect.top + shuttlecockRect.height/2 - leftPaddleRect.top) / leftPaddleRect.height;
-        dy = (hitPosition - 0.5) * 2 * shuttlecockSpeed;
+        // 根据球拍速度增加羽毛球速度，但限制最大速度
+        const speedMultiplier = 1 + (paddleSpeed - basePaddleSpeed) / (maxPaddleSpeed - basePaddleSpeed);
+        const maxShuttlecockSpeed = 8; // 羽毛球最大速度
+        const speedDecay = 0.98; // 速度衰减系数
+        
+        // 计算新速度并限制最大值
+        let newDy = (hitPosition - 0.5) * 2 * shuttlecockSpeed * speedMultiplier;
+        let newDx = Math.abs(dx) * speedMultiplier;
+        
+        // 应用速度衰减
+        dy = Math.min(newDy * speedDecay, maxShuttlecockSpeed);
+        dx = Math.min(newDx * speedDecay, maxShuttlecockSpeed);
     }
 
     // 右球拍碰撞
@@ -174,17 +210,28 @@ function checkCollisions() {
         shuttlecockX = rightPaddleRect.left - shuttlecockRect.width;
         // 根据碰撞位置调整垂直速度
         const hitPosition = (shuttlecockRect.top + shuttlecockRect.height/2 - rightPaddleRect.top) / rightPaddleRect.height;
-        dy = (hitPosition - 0.5) * 2 * shuttlecockSpeed;
+        // 根据球拍速度增加羽毛球速度，但限制最大速度
+        const speedMultiplier = 1 + (paddleSpeed - basePaddleSpeed) / (maxPaddleSpeed - basePaddleSpeed);
+        const maxShuttlecockSpeed = 8; // 羽毛球最大速度
+        const speedDecay = 0.98; // 速度衰减系数
+        
+        // 计算新速度并限制最大值
+        let newDy = (hitPosition - 0.5) * 2 * shuttlecockSpeed * speedMultiplier;
+        let newDx = Math.abs(dx) * speedMultiplier;
+        
+        // 应用速度衰减
+        dy = Math.min(newDy * speedDecay, maxShuttlecockSpeed);
+        dx = -Math.min(newDx * speedDecay, maxShuttlecockSpeed);
     }
 
-    // 得分检测
-    if (shuttlecockRect.left <= 0) {
+    // 得分检测 - 羽毛球必须越过中线
+    if (shuttlecockRect.left <= 0 && shuttlecockRect.right < court.offsetWidth/2) {
         score2++;
-        resetShuttlecock();
+        endGame(2);
     }
-    if (shuttlecockRect.right >= court.offsetWidth) {
+    if (shuttlecockRect.right >= court.offsetWidth && shuttlecockRect.left > court.offsetWidth/2) {
         score1++;
-        resetShuttlecock();
+        endGame(1);
     }
 }
 
@@ -193,20 +240,13 @@ function resetShuttlecock() {
     shuttlecockX = 400;
     shuttlecockY = 250;
     dx = shuttlecockSpeed * (Math.random() > 0.5 ? 1 : -1);
-    dy = shuttlecockSpeed * (Math.random() > 0.5 ? 1 : -1);
+    dy = 0; // 初始垂直速度为0，保持水平运动
 }
 
 // 更新分数
 function updateScore() {
     player1Score.textContent = score1;
     player2Score.textContent = score2;
-
-    // 检查胜利条件
-    if (score1 >= winningScore) {
-        endGame(1);
-    } else if (score2 >= winningScore) {
-        endGame(2);
-    }
 }
 
 // 游戏控制函数
@@ -219,8 +259,14 @@ function startGame() {
 
 function endGame(winner) {
     gameActive = false;
-    winnerText.textContent = `玩家 ${winner} 获胜！`;
+    winnerText.textContent = `玩家 ${winner} 获胜！比分：${score1} - ${score2}`;
     endScreen.classList.add('visible');
+    
+    // 添加分数动画
+    winnerText.style.animation = 'scoreAnimation 1s ease-in-out';
+    setTimeout(() => {
+        winnerText.style.animation = '';
+    }, 1000);
 }
 
 function restartGame() {
@@ -238,3 +284,14 @@ function resetGame() {
 
 // 显示开始界面
 startScreen.style.display = 'flex';
+
+// 添加分数动画样式
+const style = document.createElement('style');
+style.textContent = `
+@keyframes scoreAnimation {
+    0% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.2); opacity: 0.8; }
+    100% { transform: scale(1); opacity: 1; }
+}
+`;
+document.head.appendChild(style);
