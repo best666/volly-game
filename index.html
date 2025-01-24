@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>羽毛球双人对战</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <div class="court">
+            <div class="net"></div>
+            <div class="left-paddle"></div>
+            <div class="right-paddle"></div>
+            <div class="shuttlecock"></div>
+            <div class="score">
+                <span class="player1">0</span>
+                <span class="player2">0</span>
+            </div>
+        </div>
+        
+        <!-- 开始界面 -->
+        <div class="start-screen">
+            <button class="start-btn">开始游戏</button>
+        </div>
+
+        <!-- 结束界面 -->
+        <div class="end-screen">
+            <div class="winner"></div>
+            <button class="restart-btn">重新开始</button>
+        </div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
